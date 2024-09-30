@@ -15,8 +15,8 @@ const RootLayoutNav = () => {
   return (
     <ActionSheetProvider>
       <>
-        <StatusBar style="light" />
         <GestureHandlerRootView style={{ flex: 1 }}>
+          <StatusBar style="light" />
           <InitialLayout />
         </GestureHandlerRootView>
       </>
