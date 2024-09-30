@@ -10,6 +10,8 @@ import React from "react";
 import { AuthStrategy, ModalType } from "@/types/enum";
 import { BottomSheetView } from "@gorhom/bottom-sheet";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useOAuth, useSignIn, useSignUp } from "@clerk/clerk-expo";
+import { useWarmUpBrowser } from "@/hooks/useWamrUpBrowser";
 
 const LOGIN_OPTIONS = [
   {
@@ -39,9 +41,72 @@ interface AuthModalProps {
 }
 
 const AuthModal = ({ authType }: AuthModalProps) => {
+  useWarmUpBrowser(); //for android
+
+  const { signUp, setActive } = useSignUp();
+  const { signIn } = useSignIn();
+  const { startOAuthFlow: googleAuth } = useOAuth({
+    strategy: AuthStrategy.Google,
+  });
+  const { startOAuthFlow: microsoftAuth } = useOAuth({
+    strategy: AuthStrategy.Microsoft,
+  });
+  const { startOAuthFlow: slackAuth } = useOAuth({
+    strategy: AuthStrategy.Slack,
+  });
+  const { startOAuthFlow: appleAuth } = useOAuth({
+    strategy: AuthStrategy.Apple,
+  });
+
   const onSelectedAuth = async (strategy: AuthStrategy) => {
-    console.log(strategy);
-    //TODO - Clerk auth
+    if (!signIn || !signUp) return;
+
+    const userExistsButNeedsToSignIn =
+      signUp.verifications.externalAccount.status === "transferable" &&
+      signUp.verifications.externalAccount.error?.code ===
+        "external_account_exists";
+
+    if (userExistsButNeedsToSignIn) {
+      const res = await signIn.create({ transfer: true });
+
+      if (res.status === "complete") {
+        setActive({
+          session: res.createdSessionId,
+        });
+      }
+    }
+
+    const selectedAuth = {
+      [AuthStrategy.Google]: googleAuth,
+      [AuthStrategy.Microsoft]: microsoftAuth,
+      [AuthStrategy.Apple]: appleAuth,
+      [AuthStrategy.Slack]: slackAuth,
+    }[strategy];
+
+    const userNeedsToBeCreated =
+      signIn.firstFactorVerification.status === "transferable";
+
+    if (userNeedsToBeCreated) {
+      const res = await signUp.create({
+        transfer: true,
+      });
+
+      if (res.status === "complete") {
+        setActive({
+          session: res.createdSessionId,
+        });
+      }
+    } else {
+      try {
+        const { createdSessionId, setActive } = await selectedAuth();
+        if (createdSessionId) {
+          setActive!({ session: createdSessionId });
+          console.log("session created");
+        }
+      } catch (error) {
+        console.log("🚀 ~ onSelectedAuth ~ error:", error);
+      }
+    }
   };
 
   return (
